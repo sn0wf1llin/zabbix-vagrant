@@ -41,7 +41,7 @@ function test_zabbix_sender() {
 		exit 1;
 	fi;
 
-	zabbix_sender -z $SEND_TO_IP -s "Host1111" -k trap -o 43 -vv
+	zabbix_sender -z $SEND_TO_IP -s "zabbix.lab.server" -k db.connections -o 43 -vv
 }
 
 function mkagent() {

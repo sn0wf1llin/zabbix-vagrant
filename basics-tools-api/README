@@ -1,0 +1,6 @@
+Vagrantfile consists zabbix server & 1 agent (passive mode by default)
+build.sh for make basic dependencies
+
+Task 1 Zabbix Basics; 
+Task 2 Zabbix Tools; 
+Task 3 Zabbix API Python;
