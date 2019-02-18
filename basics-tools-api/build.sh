@@ -30,7 +30,8 @@ function test_zabbix_get() {
 	fi;
 
 	zabbix_get -V
-	zabbix_get -s $GET_FROM_IP -p 10050 -k 'system.cpu.load[all,avg1]'
+	zabbix_get -s $GET_FROM_IP -p 10050 -k 'system.cpu.load[all,avg1]';
+	zabbix_get -s $GET_FROM_IP -p 10050 -k 'system.uptime';
 }
 
 function test_zabbix_sender() {
@@ -41,7 +42,20 @@ function test_zabbix_sender() {
 		exit 1;
 	fi;
 
-	zabbix_sender -z $SEND_TO_IP -s "Host1111" -k trap -o 43 -vv
+	for i in 40 200 1000 700 100 40; do zabbix_sender -z $SEND_TO_IP -s "Host1111" -k trap -o $i -vv; done;
+}
+
+function add_host_by_python_script() {
+	# copy script from /vagrant/register_host.py to /opt/register_host.py
+	cp /vagrant/register_host.py /opt/; cp /vagrant/requirements.txt /opt/;
+
+	# install pip, zabbix python lib
+	yum install -y python-pip
+	pip install --upgrade pip; pip install -r /opt/requirements.txt;
+
+	chmod +x /opt/register_host.py
+	/opt/register_host.py
+
 }
 
 function mkagent() {
