@@ -88,7 +88,7 @@ def hostgroup_get(hostgroup_name=''):
 def hostgroup_create(hostgroup_name):
     if hostgroup_get(hostgroup_name):
         print "hostgroup  {}{}{} is exist !".format(CLR_FAIL, hostgroup_name, CLR_FIN)
-        sys.exit(1)
+        return
     
     data = json.dumps({
         "jsonrpc": "2.0",
@@ -106,12 +106,13 @@ def hostgroup_create(hostgroup_name):
 
     try:
         result = urllib2.urlopen(request)
-    except URLError as e:
-        print "Error as ", e
-    else:
         response = json.loads(result.read())
         result.close()
         print "{} result:{}{}  hostgroupID : {}".format(CLR_WARN, hostgroup_name, CLR_FIN, response['result']['groupids'])
+
+    except URLError as e:
+        print "Error as ", e
+
 
 def template_get(template_name=''):
     data = json.dumps({
@@ -196,7 +197,7 @@ def host_get(host_name=''):
 def host_create(hostdata):
     if host_get(hostdata["IP"]):
         print "{} host ip {} exists!{}".format(CLR_OK, hostdata["IP"], CLR_FIN)
-        sys.exit(1)
+        return
 
     group_list = []
     template_list = []
@@ -252,7 +253,7 @@ def host_create(hostdata):
 
 
 if __name__ == "__main__":
-	hostgroup_name = "TestGroup2"
+	hostgroup_name = "CloudHosts"
 	hostgroup_create(hostgroup_name)
 
 	group_id = hostgroup_get(hostgroup_name)
@@ -262,7 +263,7 @@ if __name__ == "__main__":
 		"IP": "192.168.33.66",
 		"groups": hostgroup_name,
 		"port": 10050,
-		"hostname": "TestHost2",
+		"hostname": "CloudHost1",
 		"templates": "Template OS Linux",
 
 	}

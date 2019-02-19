@@ -14,7 +14,7 @@ function success(){
 }
 
 function debug() {
-	yum install -y lsof telnet net-tools
+	yum install -y lsof telnet net-tools vim
 
 	echo "set number" > ~/.vimrc
 	echo "syntax on" >> ~/.vimrc
@@ -35,11 +35,6 @@ function install_tomcat() {
 
 	systemctl start tomcat; systemctl enable tomcat;
 	curl -IL http://localhost:8080/JavaHelloWorldApp
-}
-
-function install_monitor_java() {
-	install_tomcat
-
 }
 
 function mkagent() {
@@ -109,7 +104,35 @@ function mkagent() {
 	
 	lsof -i -P -n | grep ":10050" | tail -n 5 || echo "no ports LISTEN"
 
+	install_tomcat
+
+	# configure jmx/jri listener 
+	CATALINA_HOME="/usr/share/tomcat"
+	wget  http://archive.apache.org/dist/tomcat/tomcat-7/v7.0.8/bin/extras/catalina-jmx-remote.jar -P /tmp/
+	mv /tmp/catalina-jmx-remote.jar $CATALINA_HOME/lib/
+	new_listener='<Listener className="org.apache.catalina.mbeans.JmxRemoteLifecycleListener" rmiRegistryPortPlatform="8097" rmiServerPortPlaform="8098" />'
+	cat $CATALINA_HOME/conf/server.xml | grep rmiRegistry || sed -i "/port=\"8005\"/a\\$new_listener" $CATALINA_HOME/conf/server.xml
+
+	firewall-cmd --add-port={12345/tcp,12346/tcp,8097/tcp,8098/tcp} --permanent
+	firewall-cmd --reload
+	systemctl restart zabbix-agent
+
+}
+
+
+function server_install_configure_java_gw() {
+	# install java gateway
+	yum install -y zabbix-java-gateway
+
+	systemctl start zabbix-java-gateway; systemctl enable zabbix-java-gateway; 
+
+	ZABBIX_CONF="/etc/zabbix/zabbix_server.conf"
+	SERVER_IP="$1"
+	sed -i "/JavaGateway=/s/^# //; /JavaGateway=/s/=.*/=$SERVER_IP/" $ZABBIX_CONF
+	sed -i "/JavaGatewayPort=/s/^# //" $ZABBIX_CONF
+	sed -i "/StartJavaPollers=/s/^# //; /StartJavaPollers=/s/=.*/=5/" $ZABBIX_CONF
 	
+	systemctl restart zabbix-server
 }
 
 function mkserver() {
@@ -163,6 +186,10 @@ function mkserver() {
 	
 	lsof -i -P -n | grep -E '10051|10050' | tail -n 5 || echo "no ports LISTEN"
 
+	systemctl status zabbix-server
+	SERVER_IP="$1"
+	server_install_configure_java_gw $SERVER_IP
+	systemctl status zabbix-server
 }
 
 case $TYPE in 
@@ -197,8 +224,13 @@ case $TYPE in
 		export ZABBIX_USER="zabbix"
 		export ZABBIX_PASSWORD="serverpassword"
 
-		debug 
-		mkserver 
+		if [ "$#" -eq 2 ]; then
+			ZABBIX_SERVER_IP="$2"; 
+			mkserver $ZABBIX_SERVER_IP;
+
+		else
+			mkserver
+		fi;
 
 		trap failed 1
 		trap success 0
