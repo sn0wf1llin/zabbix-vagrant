@@ -20,28 +20,18 @@ function debug() {
 	echo "syntax on" >> ~/.vimrc
 }
 
-function test_zabbix_get() {
-	echo "TEST ZABBIX-GET"
+function install_tomcat() {
+	yum install -y java-1.8.0-openjdk-devel tomcat tomcat-webapps tomcat-admin-webapps 1> /dev/null
 
-	GET_FROM_IP="$1"
-	if [ -z $GET_FROM_IP ]; then
-		echo "can't get data from undefined IP (GET_FROM_IP == <>)"
-		exit 1;
-	fi;
+	firewall-cmd --add-port=8080/tcp --permanent
+	firewall-cmd --reload
 
-	zabbix_get -V
-	zabbix_get -s $GET_FROM_IP -p 10050 -k 'system.cpu.load[all,avg1]'
-}
+	# copy .war for deployment 
+	cp /vagrant/JavaHelloWorldApp.war /usr/share/tomcat/webapps/
+	curl -IL http://localhost:8080/JavaHelloWorldApp
 
-function test_zabbix_sender() {
-	echo "TEST ZABBIX-SENDER"
-	SEND_TO_IP="$1"
-	if [ -z $SEND_TO_IP ]; then
-		echo "can't send data to undefined IP (SEND_TO_IP == <>)"
-		exit 1;
-	fi;
-
-	zabbix_sender -z $SEND_TO_IP -s "zabbix.lab.server" -k db.connections -o 43 -vv
+	TOMCAT_CONFIG_FILE="/etc/sysconfig/tomcat"
+	cat $TOMCAT_CONFIG_FILE | grep preferIPv4Stack || echo 'JAVA_OPTS="-Djava.net.preferIPv4Stack=true -Djava.security.egd=file:/dev/./urandom -Djava.awt.headless=true -Xmx512m -XX:MaxPermSize=256m -XX:+UseConcMarkSweepGC"' >> $TOMCAT_CONFIG_FILE;
 }
 
 function mkagent() {
@@ -111,9 +101,6 @@ function mkagent() {
 	
 	lsof -i -P -n | grep ":10050" | tail -n 5 || echo "no ports LISTEN"
 
-	# iptables -A INPUT -p tcp --dport 10050 -s $ZABBIX_SERVER_IP -j ACCEPT
-
-	test_zabbix_sender $ZABBIX_SERVER_IP
 }
 
 function mkserver() {
@@ -166,9 +153,6 @@ function mkserver() {
 	systemctl restart httpd
 	
 	lsof -i -P -n | grep -E '10051|10050' | tail -n 5 || echo "no ports LISTEN"
-
-	TEST_AGENT_URL="192.168.33.22"
-	test_zabbix_get $TEST_AGENT_URL
 }
 
 case $TYPE in 
