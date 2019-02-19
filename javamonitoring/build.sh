@@ -21,6 +21,7 @@ function debug() {
 }
 
 function install_tomcat() {
+	ZABBIX_SERVER_IP="$1"
 	yum install -y java-1.8.0-openjdk-devel 1> /dev/null
 	yum install -y tomcat tomcat-webapps tomcat-admin-webapps 
 
@@ -31,7 +32,7 @@ function install_tomcat() {
 	cp /vagrant/JavaHelloWorldApp.war /usr/share/tomcat/webapps/
 
 	TOMCAT_CONFIG_FILE="/etc/sysconfig/tomcat"
-	cat $TOMCAT_CONFIG_FILE | grep preferIPv4Stack || echo 'JAVA_OPTS="-Djava.net.preferIPv4Stack=true -Djava.security.egd=file:/dev/./urandom -Djava.awt.headless=true -Xmx512m -XX:MaxPermSize=256m -XX:+UseConcMarkSweepGC -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=12345 -Dcom.sun.management.jmxremote.rmi.port=12346 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"' >> $TOMCAT_CONFIG_FILE;
+	cat $TOMCAT_CONFIG_FILE | grep preferIPv4Stack || echo "JAVA_OPTS=\"-Djava.net.preferIPv4Stack=true -Djava.security.egd=file:/dev/./urandom -Djava.awt.headless=true -Xmx512m -XX:MaxPermSize=256m -XX:+UseConcMarkSweepGC -Djava.rmi.server.hostname=$ZABBIX_SERVER_IP -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=12345 -Dcom.sun.management.jmxremote.rmi.port=12346 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false\"" >> $TOMCAT_CONFIG_FILE;
 
 	systemctl start tomcat; systemctl enable tomcat;
 	curl -IL http://localhost:8080/JavaHelloWorldApp
@@ -104,7 +105,7 @@ function mkagent() {
 	
 	lsof -i -P -n | grep ":10050" | tail -n 5 || echo "no ports LISTEN"
 
-	install_tomcat
+	install_tomcat $ZABBIX_SERVER_IP
 
 	# configure jmx/jri listener 
 	CATALINA_HOME="/usr/share/tomcat"
@@ -116,6 +117,32 @@ function mkagent() {
 	firewall-cmd --add-port={12345/tcp,12346/tcp,8097/tcp,8098/tcp} --permanent
 	firewall-cmd --reload
 	systemctl restart zabbix-agent
+
+	# ------------------------------------------------------
+	# uncomment only for provision/memory leak trigger check
+	# ------------------------------------------------------
+	# lib.tar.gz in /vagrant folder expected !!!
+	# cp /vagrant/lib_j4v4.tar.gz /tmp/
+	# cd /tmp
+	# tar -xzf lib_j4v4.tar.gz
+	# WAR_APP_FOLDER="/usr/share/tomcat/webapps/TestApp"
+
+	# cp /tmp/lib_j4v4/*.jar $WAR_APP_FOLDER/WEB-INF/lib/
+	# opstat "Copying lib files to $WAR_APP_FOLDER/WEB-INF/lib/ ... " $?;
+	# ls -m $WAR_APP_FOLDER/WEB-INF/lib/
+	
+	# WAR_WEB_XML="$WAR_APP_FOLDER/WEB-INF/web.xml"
+	
+	# cat $WAR_WEB_XML | grep multipart-config
+	# if [ $? -eq 1 ]; then
+	# 	sed -i 's/GenericServlet<\/servlet-class>/GenericServlet<\/servlet-class>\n\t<multipart-config>\n\t<location>\/tmp<\/location>\n\t<max-request-size>418018841<\/max-request-size>\n\t<max-file-size>20848820<\/max-file-size>\n\t<file-size-threshold>1048576<\/file-size-threshold>\n\t<\/multipart-config>/' $WAR_WEB_XML
+	# 	opstat "adding <multipart-config> ... to $WAR_WEB_XML GenericServlet" $?;
+	
+	# 	sed -i 's/MemoryLeakServlet<\/servlet-class>/MemoryLeakServlet<\/servlet-class>\n\t<multipart-config>\n\t<location>\/tmp<\/location>\n\t<max-request-size>418018841<\/max-request-size>\n\t<max-file-size>20848820<\/max-file-size>\n\t<file-size-threshold>1048576<\/file-size-threshold>\n\t<\/multipart-config>/' $WAR_WEB_XML
+	# 	opstat "adding <multipart-config> ... to $WAR_WEB_XML MemoryLeakServlet" $?;
+	# 	cat $WAR_WEB_XML | grep multipart-config -C 4
+	
+	# fi;
 
 }
 
