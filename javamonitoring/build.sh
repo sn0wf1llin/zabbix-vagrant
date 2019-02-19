@@ -20,34 +20,32 @@ function debug() {
 	echo "syntax on" >> ~/.vimrc
 }
 
-function test_zabbix_get() {
-	echo "TEST ZABBIX-GET"
+function install_tomcat() {
+	yum install -y java-1.8.0-openjdk-devel 1> /dev/null
+	yum install -y tomcat tomcat-webapps tomcat-admin-webapps 
 
-	GET_FROM_IP="$1"
-	if [ -z $GET_FROM_IP ]; then
-		echo "can't get data from undefined IP (GET_FROM_IP == <>)"
-		exit 1;
-	fi;
+	firewall-cmd --add-port=8080/tcp --permanent
+	firewall-cmd --reload
 
-	zabbix_get -V
-	zabbix_get -s $GET_FROM_IP -p 10050 -k 'system.cpu.load[all,avg1]'
+	# copy .war for deployment 
+	cp /vagrant/JavaHelloWorldApp.war /usr/share/tomcat/webapps/
+
+	TOMCAT_CONFIG_FILE="/etc/sysconfig/tomcat"
+	cat $TOMCAT_CONFIG_FILE | grep preferIPv4Stack || echo 'JAVA_OPTS="-Djava.net.preferIPv4Stack=true -Djava.security.egd=file:/dev/./urandom -Djava.awt.headless=true -Xmx512m -XX:MaxPermSize=256m -XX:+UseConcMarkSweepGC -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=12345 -Dcom.sun.management.jmxremote.rmi.port=12346 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"' >> $TOMCAT_CONFIG_FILE;
+
+	systemctl start tomcat; systemctl enable tomcat;
+	curl -IL http://localhost:8080/JavaHelloWorldApp
 }
 
-function test_zabbix_sender() {
-	echo "TEST ZABBIX-SENDER"
-	SEND_TO_IP="$1"
-	if [ -z $SEND_TO_IP ]; then
-		echo "can't send data to undefined IP (SEND_TO_IP == <>)"
-		exit 1;
-	fi;
+function install_monitor_java() {
+	install_tomcat
 
-	zabbix_sender -z $SEND_TO_IP -s "zabbix.lab.server" -k db.connections -o 43 -vv
 }
 
 function mkagent() {
 	debug 
-	yum install -y zabbix-sender lsof zabbix-agent 1> /dev/null
-	yum install -y http://repo.zabbix.com/zabbix/3.4/rhel/7/x86_64/zabbix-release-3.4-1.el7.centos.noarch.rpm 1> /dev/null
+	yum install -y https://repo.zabbix.com/zabbix/3.4/rhel/7/x86_64/zabbix-release-3.4-1.el7.centos.noarch.rpm
+	yum install -y zabbix-agent # 1> /dev/null
 
 	ZABBIX_CONF="/etc/zabbix/zabbix_agentd.conf"
 	sed -i '/DebugLevel=/s/# //g' $ZABBIX_CONF
@@ -111,13 +109,12 @@ function mkagent() {
 	
 	lsof -i -P -n | grep ":10050" | tail -n 5 || echo "no ports LISTEN"
 
-	# iptables -A INPUT -p tcp --dport 10050 -s $ZABBIX_SERVER_IP -j ACCEPT
-
-	test_zabbix_sender $ZABBIX_SERVER_IP
+	
 }
 
 function mkserver() {
-	yum install -y lsof net-tools mariadb mariadb-server zabbix-get 1> /dev/null
+	debug
+	yum install -y mariadb mariadb-server zabbix-get 1> /dev/null
 	/usr/bin/mysql_install_db --user=mysql
 
 	systemctl start mariadb && systemctl enable mariadb || echo "mariadb start [ failed ]" ;
@@ -129,8 +126,7 @@ function mkserver() {
 	fi;
 	
 	yum install -y http://repo.zabbix.com/zabbix/3.4/rhel/7/x86_64/zabbix-release-3.4-1.el7.centos.noarch.rpm 1> /dev/null
-	yum install -y zabbix-get zabbix-server-mysql zabbix-web-mysql zabbix-agent 1> /dev/null
-
+	yum install -y zabbix-server-mysql zabbix-web-mysql zabbix-agent 
 	systemctl start httpd && systemctl enable httpd || echo "httpd start [ failed ]"
 
 	zcat /usr/share/doc/zabbix-server-mysql-*/create.sql.gz | mysql -u"$ZABBIX_USER" -p"$ZABBIX_PASSWORD" $DATABASE_NAME
@@ -167,8 +163,6 @@ function mkserver() {
 	
 	lsof -i -P -n | grep -E '10051|10050' | tail -n 5 || echo "no ports LISTEN"
 
-	TEST_AGENT_URL="192.168.33.22"
-	test_zabbix_get $TEST_AGENT_URL
 }
 
 case $TYPE in 

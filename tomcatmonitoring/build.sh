@@ -21,23 +21,26 @@ function debug() {
 }
 
 function install_tomcat() {
-	yum install -y java-1.8.0-openjdk-devel tomcat tomcat-webapps tomcat-admin-webapps 1> /dev/null
+	yum install -y java-1.8.0-openjdk-devel 1> /dev/null
+	yum install -y tomcat tomcat-webapps tomcat-admin-webapps 
 
 	firewall-cmd --add-port=8080/tcp --permanent
 	firewall-cmd --reload
 
 	# copy .war for deployment 
 	cp /vagrant/JavaHelloWorldApp.war /usr/share/tomcat/webapps/
-	curl -IL http://localhost:8080/JavaHelloWorldApp
 
 	TOMCAT_CONFIG_FILE="/etc/sysconfig/tomcat"
 	cat $TOMCAT_CONFIG_FILE | grep preferIPv4Stack || echo 'JAVA_OPTS="-Djava.net.preferIPv4Stack=true -Djava.security.egd=file:/dev/./urandom -Djava.awt.headless=true -Xmx512m -XX:MaxPermSize=256m -XX:+UseConcMarkSweepGC"' >> $TOMCAT_CONFIG_FILE;
+
+	systemctl start tomcat; systemctl enable tomcat;
+	curl -IL http://localhost:8080/JavaHelloWorldApp
 }
 
 function mkagent() {
 	debug 
-	yum install -y zabbix-sender lsof zabbix-agent 1> /dev/null
 	yum install -y http://repo.zabbix.com/zabbix/3.4/rhel/7/x86_64/zabbix-release-3.4-1.el7.centos.noarch.rpm 1> /dev/null
+	yum install -y zabbix-agent zabbix-sender  1> /dev/null
 
 	ZABBIX_CONF="/etc/zabbix/zabbix_agentd.conf"
 	sed -i '/DebugLevel=/s/# //g' $ZABBIX_CONF
@@ -100,6 +103,8 @@ function mkagent() {
 	systemctl start zabbix-agent && systemctl enable zabbix-agent || echo "zabbix-agent start [ failed ]" ;
 	
 	lsof -i -P -n | grep ":10050" | tail -n 5 || echo "no ports LISTEN"
+
+	install_tomcat
 
 }
 
